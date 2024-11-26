@@ -16,11 +16,15 @@ public class Galatica {
   public static void main(String[] args) throws Exception {
     ObjectMapper M = new com.fasterxml.jackson.databind.ObjectMapper();
 
-    String secretKeyLocation = System.getenv("HOME") + "/.openai";
+    String secretConfigLocation = System.getenv("HOME") + "/.ai";
 
     // TODO: provide an over-ride argument to have a different location
-    String secretFile = Files.readString(Path.of(secretKeyLocation));
-    String secretKey = M.readTree(secretFile).get("key").textValue();
+    String secretConfigBody = Files.readString(Path.of(secretConfigLocation));
+    ObjectNode config = (ObjectNode) M.readTree(secretConfigBody);
+
+    String secretKey = config.get("key").textValue();
+    String vendor = config.get("vendor").textValue();
+
 
     StringBuilder preamble = new StringBuilder();
     File preambleFile = new File("preamble.txt");
@@ -37,9 +41,56 @@ public class Galatica {
       }
     }
 
-    System.out.println(gpt4o(secretKey, preamble.toString(), String.join(" ", args)));
-    // TODO: make this an optional in the config
-    // System.out.println(turbo35(secretKey, preamble.toString() + String.join(" ", args)));
+    if ("openai".equals(vendor)) {
+      if (config.has("model") && "turbo35".equals(config.get("model").textValue())) {
+        System.out.println(turbo35(secretKey, preamble.toString() + String.join(" ", args)));
+      } else {
+        System.out.println(gpt4o(secretKey, preamble.toString(), String.join(" ", args)));
+      }
+    } else if ("anthropic".equals(vendor)) {
+      System.out.println(claude(secretKey, preamble.toString(), String.join(" ", args)));
+    } else {
+      throw new Exception("Unknown vendor: " + vendor);
+    }
+  }
+
+  private static String claude(String secretKey, String preamble, String prompt) throws IOException {
+    OkHttpClient client = new OkHttpClient.Builder() //
+        .connectTimeout(10, TimeUnit.SECONDS) //
+        .writeTimeout(10, TimeUnit.SECONDS) //
+        .readTimeout(120, TimeUnit.SECONDS) //
+        .build();
+
+    // JSON body to send with the request
+    ObjectNode node = new JsonMapper().createObjectNode();
+    node.put("model", "claude-3-5-sonnet-20241022");
+    node.put("max_tokens", 2048);
+    node.put("system", preamble);
+
+    ArrayNode messages = node.putArray("messages");
+
+    ObjectNode ask = messages.addObject();
+    ask.put("role", "user");
+    ask.put("content", prompt);
+
+    RequestBody body = RequestBody.create(node.toString(), MediaType.get("application/json; charset=utf-8"));
+
+    Request request = new Request.Builder()
+        .url("https://api.anthropic.com/v1/messages") //
+        .header("x-api-key", secretKey) //
+        .header("anthropic-version", "2023-06-01") //
+        .post(body)
+        .build();
+    // Execute the request
+    try (Response response = client.newCall(request).execute()) {
+      if (!response.isSuccessful()) {
+        throw new IOException("Unexpected code " + response + "//" + response.body().string());
+      }
+
+      // Parse the response body
+      String responseBody = response.body().string();
+      return new JsonMapper().readTree(responseBody).get("content").get(0).get("text").textValue().trim();
+    }
   }
 
   private static String gpt4o(String secretKey, String preamble, String prompt) throws IOException {
