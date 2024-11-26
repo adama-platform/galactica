@@ -12,20 +12,30 @@ import java.nio.file.Path;
 
 public class Galatica {
   public static void main(String[] args) throws Exception {
+    ObjectMapper M = new com.fasterxml.jackson.databind.ObjectMapper();
+
     String secretKeyLocation = System.getenv("HOME") + "/.openai";
 
     // TODO: provide an over-ride argument to have a different location
     String secretFile = Files.readString(Path.of(secretKeyLocation));
-    ObjectMapper M = new com.fasterxml.jackson.databind.ObjectMapper();
     String secretKey = M.readTree(secretFile).get("key").textValue();
 
-    String preamble = "";
+    StringBuilder preamble = new StringBuilder();
     File preambleFile = new File("preamble.txt");
     if (preambleFile.exists()) {
-      preamble = Files.readString(preambleFile.toPath()) + " ";
+      preamble.append(Files.readString(preambleFile.toPath()).trim()).append("\n");
     }
 
-    String prompt = preamble + String.join(" ", args);
+    File databasePackageFile = new File("db.json");
+    if (databasePackageFile.exists()) {
+      String databaseInfo = Files.readString(databasePackageFile.toPath());
+      DataBase db = new DataBase(M.readTree(databaseInfo));
+      for (String table : db.showTables()) {
+        preamble.append(db.toPrompt(table));
+      }
+    }
+
+    String prompt = preamble.toString() + String.join(" ", args);
 
     System.out.println(gen(secretKey, prompt));
   }
