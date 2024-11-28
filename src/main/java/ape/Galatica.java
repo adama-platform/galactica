@@ -7,12 +7,36 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import okhttp3.*;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
 public class Galatica {
+
+  private static String extOf(String filename) {
+    int kLastDot = filename.lastIndexOf('.');
+    if (kLastDot >= 0) {
+      return filename.substring(kLastDot + 1);
+    }
+    return null;
+  }
+
+  private static String selectCode(String ext, String output) {
+    if (ext != null) {
+      int first = output.indexOf("```" + ext);
+      if (first > 0) {
+        int end = output.lastIndexOf("```", first + 1);
+        if (first < end) {
+          return output.substring(first + 3 + ext.length(), end);
+        }
+      }
+    }
+    return output;
+  }
+
   public static void main(String[] args) throws Exception {
     ObjectMapper M = new com.fasterxml.jackson.databind.ObjectMapper();
 
@@ -41,16 +65,54 @@ public class Galatica {
       }
     }
 
+    boolean isUpdate = "--update".equalsIgnoreCase(args[0]);
+    boolean isCreate = "--create".equalsIgnoreCase(args[0]);
+    boolean isAppend = "--append".equalsIgnoreCase(args[0]);
+    File writeDestination = null;
+    int startAt = 0;
+    String ext = null;
+    if (isUpdate) {
+      startAt = 2;
+      writeDestination = new File(args[1]);
+      preamble.append("The file to update is:\n");
+      preamble.append("```").append(extOf(args[1])).append("\n");
+      preamble.append(Files.readString(writeDestination.toPath()));
+      preamble.append("```\n");
+      ext = extOf(args[1]);
+    } else if (isCreate || isAppend) {
+      startAt = 2;
+      writeDestination = new File(args[1]);
+      ext = extOf(args[1]);
+    }
+
+    ArrayList<String> promptList = new ArrayList<>();
+    for (int k = startAt; k < args.length; k++) {
+      promptList.add(args[k]);
+    }
+
+    String prompt = String.join(" ", promptList);
+
+    String output = null;
     if ("openai".equals(vendor)) {
       if (config.has("model") && "turbo35".equals(config.get("model").textValue())) {
-        System.out.println(turbo35(secretKey, preamble.toString() + String.join(" ", args)));
+        output = turbo35(secretKey, preamble.toString() + prompt);
       } else {
-        System.out.println(gpt4o(secretKey, preamble.toString(), String.join(" ", args)));
+        output = gpt4o(secretKey, preamble.toString(), prompt);
       }
     } else if ("anthropic".equals(vendor)) {
-      System.out.println(claude(secretKey, preamble.toString(), String.join(" ", args)));
+      output = claude(secretKey, preamble.toString(), prompt);
     } else {
       throw new Exception("Unknown vendor: " + vendor);
+    }
+
+    output = selectCode(ext, output);
+
+    if (isUpdate || isCreate) {
+      Files.writeString(writeDestination.toPath(), output);
+    } else if (isAppend) {
+      Files.writeString(writeDestination.toPath(), Files.readString(writeDestination.toPath()) + "\n" + output);
+    } else {
+      System.out.println(output);
     }
   }
 
