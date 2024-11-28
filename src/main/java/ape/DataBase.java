@@ -52,7 +52,7 @@ public class DataBase implements AutoCloseable{
     StringBuilder p = new StringBuilder();
     p.append("In the database is table called " + table + " which has the following fields:");
     ArrayList<String> fields = new ArrayList<>();
-    walk("SHOW FULL COLUMNS FROM " + table, (rs) -> {
+    walk("SHOW FULL COLUMNS FROM `" + table + "`", (rs) -> {
       fields.add(rs.getString(1) + " of type " + rs.getString(2) + " having a comment of '" + rs.getString(9) + "'");
     });
     p.append(String.join(", ", fields));
