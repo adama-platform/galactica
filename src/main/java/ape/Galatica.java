@@ -27,10 +27,10 @@ public class Galatica {
   private static String selectCode(String ext, String output) {
     if (ext != null) {
       int first = output.indexOf("```" + ext);
-      if (first > 0) {
-        int end = output.lastIndexOf("```", first + 1);
+      if (first >= 0) {
+        int end = output.lastIndexOf("```");
         if (first < end) {
-          return output.substring(first + 3 + ext.length(), end);
+          return output.substring(first + 3 + ext.length(), end).trim() + "\n";
         }
       }
     }
