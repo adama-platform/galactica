@@ -10,7 +10,6 @@ import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 
 public class DataBase implements AutoCloseable{
   private final HikariDataSource pool;
@@ -30,11 +29,12 @@ public class DataBase implements AutoCloseable{
   }
 
   private void walk(String sql, SQLConsumer action) throws Exception {
-    Connection connection = pool.getConnection();
-    try (Statement statement = connection.createStatement()) {
-      try (ResultSet row = statement.executeQuery(sql)) {
-        while (row.next()) {
-          action.accept(row);
+    try (Connection connection = pool.getConnection()) {
+      try (Statement statement = connection.createStatement()) {
+        try (ResultSet row = statement.executeQuery(sql)) {
+          while (row.next()) {
+            action.accept(row);
+          }
         }
       }
     }
