@@ -126,7 +126,7 @@ public class Galatica {
     // JSON body to send with the request
     ObjectNode node = new JsonMapper().createObjectNode();
     node.put("model", "claude-3-5-sonnet-20241022");
-    node.put("max_tokens", 2048);
+    node.put("max_tokens", 4096);
     node.put("system", preamble);
 
     ArrayNode messages = node.putArray("messages");
